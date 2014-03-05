@@ -41,6 +41,9 @@ class Hooks {
 		//Listen to create file signal
 		\OCP\Util::connectHook('OC_Filesystem', 'post_create', "OCA\Activity\Hooks", "file_create");
 
+		//Listen to rename file signal
+		\OCP\Util::connectHook('OC_Filesystem', 'post_rename', "OCA\Activity\Hooks", "file_rename");
+
 		//Listen to delete file signal
 		\OCP\Util::connectHook('OC_Filesystem', 'delete', "OCA\Activity\Hooks", "file_delete");
 
@@ -93,6 +96,7 @@ class Hooks {
 			Data::send('files', $subject_others, array($realfile, \OCP\User::getUser()), '', array(), $realfile, $link, $uidOwner, $type_others, Data::PRIORITY_HIGH);
 		}
 
+		// Add Activity for users that got the folder shared
 		$affected_users = \OCP\Share::getUsersSharingFile($params['path'], $uidOwner);
 		if (!empty($affected_users['users'])) {
 			foreach ($affected_users['users'] as $affected_user) {
@@ -114,6 +118,8 @@ class Hooks {
 		Data::send('files', $subject, substr($params['path'], 1), '', array(), $params['path'], $link, \OCP\User::getUser(), 2);
 
 		$subject = '%s deleted by %s';
+
+		// Add Activity for the owner of the folder shared
 		$uidOwner = \OC\Files\Filesystem::getOwner($params['path']);
 		if(substr($params['path'],0,8)=='/Shared/') {
 			$realfile=substr($params['path'],7);
@@ -121,12 +127,45 @@ class Hooks {
 			Data::send('files', $subject, array($realfile,\OCP\User::getUser()), '', array(), $realfile, $link, $uidOwner, 7, Data::PRIORITY_HIGH);
 		}
 
+		// Add Activity for users that got the folder shared
 		$affected_users = \OCP\Share::getUsersSharingFile($params['path'], $uidOwner);
 		if (!empty($affected_users['users'])) {
 			foreach ($affected_users['users'] as $affected_user) {
 				$realfile = '/Shared' . $params['path'];
 				$link = \OCP\Util::linkToAbsolute('files', 'index.php', array('dir' => dirname($realfile)));
 				Data::send('files', $subject, array($realfile, \OCP\User::getUser()), '', array(), $realfile, $link, $affected_user, 7, Data::PRIORITY_HIGH);
+			}
+		}
+	}
+
+	/**
+	 * @brief Store the rename hook events
+	 * @param array $params The hook params
+	 */
+	public static function file_rename($params) {
+		$link = \OCP\Util::linkToAbsolute('files', 'index.php', array('dir' => dirname($params['newpath'])));
+		$subject = '%1$s renamed to %2$s';
+		Data::send('files', $subject, array($params['oldpath'], $params['newpath']), '', array(), $params['path'], $link, \OCP\User::getUser(), 2);
+
+		$subject = '%1$s renamed to %2$s by %3$s';
+
+		// Add Activity for the owner of the folder shared
+		$uidOwner = \OC\Files\Filesystem::getOwner(dirname($params['newpath']));
+		if (substr($params['newpath'], 0, 8) == '/Shared/') {
+			$newfile = substr($params['newpath'], 7);
+			$oldpath = substr($params['oldpath'], 7);
+			$link = \OCP\Util::linkToAbsolute('files', 'index.php', array('dir' => dirname($newfile)));
+			Data::send('files', $subject, array($oldpath, $newfile, \OCP\User::getUser()), '', array(), $newfile, $link, $uidOwner, 7, Data::PRIORITY_HIGH);
+		}
+
+		// Add Activity for users that got the folder shared
+		$affected_users = \OCP\Share::getUsersSharingFile($params['newpath'], $uidOwner);
+		if (!empty($affected_users['users'])) {
+			foreach ($affected_users['users'] as $affected_user) {
+				$newfile = '/Shared' . $params['newpath'];
+				$oldpath = '/Shared' . $params['oldpath'];
+				$link = \OCP\Util::linkToAbsolute('files', 'index.php', array('dir' => dirname($newfile)));
+				Data::send('files', $subject, array($oldpath, $newfile, \OCP\User::getUser()), '', array(), $newfile, $link, $affected_user, 7, Data::PRIORITY_HIGH);
 			}
 		}
 	}
